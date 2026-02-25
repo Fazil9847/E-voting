@@ -15,6 +15,7 @@ export default function AdminResults() {
   const [totalVotes, setTotalVotes] = useState(0);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [published, setPublished] = useState(false);
 
   function Spinner() {
     return (
@@ -26,31 +27,40 @@ export default function AdminResults() {
 
   /* ================= LOAD RESULTS ================= */
 
-  const loadResults = () => {
-    const token = localStorage.getItem("admin_token");
+ const loadResults = async () => {
+  const token = localStorage.getItem("admin_token");
 
-    fetch(`${API}/results/${id}`, {
+  try {
+    setLoading(true);   // ⭐ ADD
+
+    const res = await fetch(`${API}/results/${id}`, {
       headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data.message) {
-          setError(data.message);
-          setResults([]);
-          setTotalVotes(0);
-          return;
-        }
+    });
 
-        setError("");
+    const data = await res.json();
 
-        const list = Array.isArray(data.results) ? data.results : [];
-        setResults(list);
+    if (!res.ok || data.message) {
+      setError(data.message || "Failed to load results");
+      setResults([]);
+      setTotalVotes(0);
+      return;
+    }
 
-        const total = list.reduce((sum, r) => sum + r.votes, 0);
-        setTotalVotes(total);
-      })
-      .catch(() => setError("Failed to load results"));
-  };
+    setError("");
+    setPublished(!!data.publishedAt);
+
+    const list = Array.isArray(data.results) ? data.results : [];
+    setResults(list);
+
+    const total = list.reduce((sum, r) => sum + r.votes, 0);
+    setTotalVotes(total);
+
+  } catch {
+    setError("Failed to load results");
+  } finally {
+    setLoading(false);   // ⭐ ADD
+  }
+};
 
   useEffect(() => {
     loadResults();
@@ -76,8 +86,7 @@ export default function AdminResults() {
         return;
       }
 
-      alert("Results published successfully (Fast mode)");
-
+  alert("Results published successfully.");
       loadResults(); // ⭐ refresh instantly
     } catch {
       alert("Publish failed");
@@ -87,40 +96,51 @@ export default function AdminResults() {
   };
 
   /* ================= FORCE ================= */
+const forcePublish = async () => {
+  const token = localStorage.getItem("admin_token");
 
-  const forcePublish = async () => {
-    const token = localStorage.getItem("admin_token");
+  if (!window.confirm("This will recompute ALL votes from blockchain. Continue?"))
+    return;
 
-    if (!window.confirm("This will recompute ALL votes from blockchain. Continue?"))
-      return;
+  try {
+    setLoading(true);
 
-    try {
-      setLoading(true);
-
-      const res = await fetch(
-        `${API}/results/publish/${id}?force=true`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      );
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        alert(data.message);
-        return;
+    // 🔵 Step 1: Call audit mode
+    const recountRes = await fetch(
+      `${API}/results/${id}?mode=audit`,
+      {
+        headers: { Authorization: `Bearer ${token}` }
       }
+    );
 
-      alert("Full recount completed (Blockchain verified)");
+    const recountData = await recountRes.json();
 
-      loadResults(); // ⭐ refresh instantly
-    } catch {
-      alert("Force recount failed");
-    } finally {
-      setLoading(false);
+    if (!recountRes.ok) {
+      alert(recountData.message || "Audit failed");
+      return;
     }
-  };
+
+    console.log("Audit Results:", recountData);
+
+    // 🔵 Step 2: Now publish (optional)
+    const publishRes = await fetch(
+      `${API}/results/publish/${id}?force=true`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` }
+      }
+    );
+
+    alert("Full recount completed (Blockchain verified)");
+
+    loadResults();
+
+  } catch {
+    alert("Force recount failed");
+  } finally {
+    setLoading(false);
+  }
+};
 
   /* ================= UI ================= */
 
@@ -134,6 +154,11 @@ export default function AdminResults() {
         >
           Back to Dashboard
         </Button>
+        {published && (
+  <p style={{ color: "green", marginBottom: 8 }}>
+    Results already published
+  </p>
+)}
 
         <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
           <Button onClick={publishResults} disabled={loading}>
@@ -162,6 +187,11 @@ export default function AdminResults() {
             {!loading && !error && (
               <>
                 <p>Total Votes: {totalVotes}</p>
+                {results.length === 0 && (
+  <p style={{ marginTop: 12 }}>
+    No votes recorded.
+  </p>
+)}
 
                 {results.map((r, i) => {
                   const pct =

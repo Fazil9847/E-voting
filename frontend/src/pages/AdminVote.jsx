@@ -36,12 +36,23 @@ export default function AdminVote() {
 
   /* ================= CAST VOTE ================= */
   const castVote = async () => {
-    if (!selectedCandidateId) {
-      alert("Please select a candidate");
-      return;
-    }
+  if (loading) return;  // ⭐ ADD THIS
 
-    setLoading(true);
+  if (!selectedCandidateId) {
+    alert("Please select a candidate");
+    return;
+  }
+  if (!selectedCandidateId) {
+  alert("Please select a candidate");
+  return;
+}
+
+if (!window.confirm("Confirm vote for this candidate?")) {
+  return;
+}
+
+  setLoading(true);
+
 
     try {
       const res = await fetch(`${API}/votes/cast`, {
@@ -140,6 +151,7 @@ export default function AdminVote() {
                   <input
                     type="radio"
                     name="candidate"
+                    disabled={loading}  // ⭐ ADD
                     checked={selectedCandidateId === c.candidateId}
                     onChange={() =>
                       setSelectedCandidateId(c.candidateId)

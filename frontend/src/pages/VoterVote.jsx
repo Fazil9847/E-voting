@@ -27,7 +27,7 @@ export default function VoterVote() {
             target="_blank"
             rel="noopener noreferrer"
           >
-            <Button className="w-full" style={{ marginTop: 10 }}>
+            <Button className="w-full" style={{ margin: 10, padding: 10 }}>
               View on PolygonScan
             </Button>
           </a>

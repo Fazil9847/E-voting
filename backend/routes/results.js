@@ -1,6 +1,5 @@
 const express = require("express");
-const { ethers } = require("ethers");
-const { provider, votingAbi, safeGetBlockNumber } = require("../blockchain");
+const { contract } = require("../blockchain");
 const requireAdmin = require("../middleware/requireAdmin");
 const mongoose = require("mongoose");
 
@@ -9,14 +8,10 @@ const Election = mongoose.model("Election");
 
 const router = express.Router();
 
-/* =======================================================
-   🔵 ADMIN → PUBLISH RESULTS SNAPSHOT
-======================================================= */
-
 router.post("/publish/:electionId", requireAdmin, async (req, res) => {
   try {
     const { electionId } = req.params;
-    const force = req.query.force === "true";
+    const force = req.query.force === "true";   // ⭐ ADD THIS
 
     const election = await Election.findOne({ electionId });
     if (!election)
@@ -25,149 +20,48 @@ router.post("/publish/:electionId", requireAdmin, async (req, res) => {
     if (election.isActive)
       return res.status(400).json({ message: "Election still active" });
 
-    const latestBlock = await safeGetBlockNumber();
+    // 🔒 Only block if NOT force
+    if (!force && election.resultsPublished)
+      return res.status(400).json({ message: "Already published" });
 
-    if (!latestBlock || isNaN(latestBlock)) {
-      return res.status(500).json({ message: "Blockchain not reachable" });
+    // ⭐ If normal publish
+    if (!force) {
+      election.resultsPublished = true;
+      election.publishedAt = new Date();
+      await election.save();
+
+      return res.json({ message: "Results published successfully" });
     }
 
-    const lastBlock = Number(election.lastCountedBlock || 0);
+    // ⭐ If force recount
+    return res.json({ message: "Force recount allowed" });
 
-    // Skip if no new votes
-    if (!force && lastBlock >= latestBlock) {
-      return res.json({
-        message: "No new votes since last publish",
-        snapshot: election.resultsSnapshot
-      });
-    }
-
-    const fromBlock = force
-      ? Number(process.env.DEPLOYMENT_BLOCK)
-      : lastBlock + 1;
-
-    console.log(`📊 Counting votes from ${fromBlock} → ${latestBlock}`);
-
-    const address = process.env.VOTING_CONTRACT_ADDRESS;
-    let allLogs = [];
-    let from = fromBlock;
-
-    let scanned = 0;
-    let totalLogs = 0;
-
-    // Scan blockchain in chunks
-    while (from <= latestBlock) {
-      const to = Math.min(from + 2000, latestBlock);
-
-      try {
-        console.log(`🔍 Scanning blocks ${from} → ${to}`);
-
-        const part = await provider.getLogs({
-          address,
-          fromBlock: from,
-          toBlock: to
-        });
-
-        console.log(`   → Found ${part.length} logs`);
-
-        totalLogs += part.length;
-        scanned++;
-
-        allLogs.push(...part);
-      } catch (e) {
-        console.log(`❌ Chunk failed ${from}-${to}`);
-      }
-
-      from = to + 1;
-    }
-
-    console.log(
-      `✅ Scan complete | Chunks: ${scanned} | Total logs: ${totalLogs}`
-    );
-
-    const logs = allLogs;
-    const iface = new ethers.Interface(votingAbi);
-
-    const counts = {};
-
-    for (const log of logs) {
-      let parsed;
-      try {
-        parsed = iface.parseLog(log);
-      } catch {
-        continue;
-      }
-
-      if (parsed.name !== "VoteCast") continue;
-      if (String(parsed.args.electionId) !== String(electionId)) continue;
-
-      const cid = String(parsed.args.candidateId);
-      counts[cid] = (counts[cid] || 0) + 1;
-    }
-
-    // Build snapshot
-    const candidates = await Candidate.find({ electionId });
-
-    const oldMap = {};
-    for (const s of election.resultsSnapshot || []) {
-      oldMap[String(s.candidateId)] = s.votes;
-    }
-
-    const snapshot = candidates.map(c => {
-      const cid = String(c.candidateId);
-      const oldVotes = force ? 0 : (oldMap[cid] || 0);
-      const newVotes = counts[cid] || 0;
-
-      return {
-        candidateId: cid,
-        name: c.name,
-        party: c.party,
-        votes: oldVotes + newVotes
-      };
-    });
-
-    election.resultsSnapshot = snapshot;
-    election.resultsPublished = true;
-    election.publishedAt = new Date();
-    election.publishedBlock = latestBlock;
-    election.lastCountedBlock = latestBlock;
-
-    await election.save();
-
-    res.json({
-      message: force
-        ? "Full recount completed"
-        : "Results updated successfully",
-      snapshot
-    });
   } catch (err) {
-    console.error("Publish error:", err);
-    res.status(500).json({ message: "Failed to publish results" });
+    res.status(500).json({ message: "Publish failed" });
   }
 });
 
-/* =======================================================
-   🌐 PUBLIC → LIST PUBLISHED ELECTIONS
-======================================================= */
+
+
+
+
 
 router.get("/public-elections", async (req, res) => {
   try {
     const elections = await Election.find({
-      isActive: false,
-      resultsPublished: true
-    }).select("electionId title endedAt");
-
+      resultsPublished: true,
+      isActive: false
+    }).sort({ endedAt: -1 });
     res.json(elections);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Failed to fetch elections" });
+    res.status(500).json({ message: "Failed to load elections" });
   }
 });
 
-
 /* =======================================================
-   🌐 PUBLIC → GET RESULTS BY ELECTION
+   🌐 PUBLIC → GET RESULTS (NO JWT)
 ======================================================= */
-
 router.get("/public/:electionId", async (req, res) => {
   try {
     const { electionId } = req.params;
@@ -177,14 +71,36 @@ router.get("/public/:electionId", async (req, res) => {
     if (!election)
       return res.status(404).json({ message: "Election not found" });
 
+    // 🔒 1️⃣ Must not be active
+    if (election.isActive)
+      return res.status(403).json({ message: "Election still active" });
+
+    // 🔒 2️⃣ Must be published
     if (!election.resultsPublished)
       return res.status(403).json({ message: "Results not published yet" });
 
+    const candidates = await Candidate.find({ electionId });
+
+    const results = [];
+
+    for (const candidate of candidates) {
+      const votes = await contract.getVoteCount(
+        electionId,
+        candidate.candidateId
+      );
+
+      results.push({
+        candidateId: candidate.candidateId,
+        name: candidate.name,
+        party: candidate.party,
+        votes: Number(votes)
+      });
+    }
+
     res.json({
-      electionId: election.electionId,
+      electionId,
       publishedAt: election.publishedAt,
-      publishedBlock: election.publishedBlock,
-      results: election.resultsSnapshot || []
+      results
     });
 
   } catch (err) {
@@ -193,77 +109,104 @@ router.get("/public/:electionId", async (req, res) => {
   }
 });
 
+
 /* =======================================================
-   🔵 ADMIN → GET RESULTS
+   🔵 ADMIN → GET RESULTS (JWT REQUIRED)
 ======================================================= */
 
 router.get("/:electionId", requireAdmin, async (req, res) => {
   try {
     const { electionId } = req.params;
+    const mode = req.query.mode || "normal";
 
     const election = await Election.findOne({ electionId });
     if (!election)
       return res.status(404).json({ message: "Election not found" });
 
     if (election.isActive)
-      return res.status(403).json({ message: "Election still active" });
-
-    // FAST → use snapshot if published
-    if (election.resultsPublished) {
-      return res.json({
-        electionId,
-        endedAt: election.endedAt,
-        source: "Snapshot",
-        results: election.resultsSnapshot
-      });
-    }
-
-    // If not published → read blockchain
-    const latestBlock = await safeGetBlockNumber();
-
-    const logs = await provider.getLogs({
-      address: process.env.VOTING_CONTRACT_ADDRESS,
-      fromBlock: Number(process.env.DEPLOYMENT_BLOCK),
-      toBlock: latestBlock
-    });
-
-    const iface = new ethers.Interface(votingAbi);
-    const counts = {};
-
-    for (const log of logs) {
-      let parsed;
-      try {
-        parsed = iface.parseLog(log);
-      } catch {
-        continue;
-      }
-
-      if (parsed.name !== "VoteCast") continue;
-      if (String(parsed.args.electionId) !== String(electionId)) continue;
-
-      const cid = String(parsed.args.candidateId);
-      counts[cid] = (counts[cid] || 0) + 1;
-    }
+      return res.status(400).json({ message: "Election still active" });
+    if (!election.startedBlock || !election.endedBlock) {
+  return res.status(400).json({ message: "Block range missing" });
+}
 
     const candidates = await Candidate.find({ electionId });
 
-    const results = candidates.map(c => ({
-      candidateId: c.candidateId,
-      name: c.name,
-      party: c.party,
-      votes: counts[c.candidateId] || 0
-    }));
+    // 🟢 NORMAL MODE
+    if (mode === "normal") {
+      const results = [];
 
-    res.json({
-      electionId,
-      endedAt: election.endedAt,
-      source: "Blockchain Verified",
-      results
-    });
+      for (const candidate of candidates) {
+        const votes = await contract.getVoteCount(
+          electionId,
+          candidate.candidateId
+        );
+
+        results.push({
+          candidateId: candidate.candidateId,
+          name: candidate.name,
+          party: candidate.party,
+          votes: Number(votes)
+        });
+      }
+
+      return res.json({
+        electionId,
+        source: "On-chain voteCounts",
+        results
+      });
+    }
+
+    // 🔵 AUDIT MODE
+   if (mode === "audit") {
+  console.log("🔵 FORCE RECOUNT STARTED");
+  console.log("Election:", electionId);
+  console.log("Block range:", election.startedBlock, "→", election.endedBlock);
+
+  const filter = contract.filters.VoteCast();
+  const logs = await contract.queryFilter(
+    filter,
+    election.startedBlock,
+    election.endedBlock
+  );
+
+  console.log("Total logs found:", logs.length);
+
+  const counts = {};
+
+  for (const log of logs) {
+    if (String(log.args.electionId) !== String(electionId)) continue;
+
+    const cid = String(log.args.candidateId);
+    counts[cid] = (counts[cid] || 0) + 1;
+
+    console.log("Vote counted for:", cid);
+  }
+
+  console.log("Final counts:", counts);
+
+  const results = candidates.map(c => ({
+    candidateId: c.candidateId,
+    name: c.name,
+    party: c.party,
+    votes: counts[c.candidateId] || 0
+  }));
+
+  console.log("🔵 FORCE RECOUNT COMPLETED");
+
+  return res.json({
+    electionId,
+    source: "Audit from logs",
+    results
+  });
+}
+
+    return res.status(400).json({ message: "Invalid mode" });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Result calculation failed" });
   }
 });
+
 
 module.exports = router;

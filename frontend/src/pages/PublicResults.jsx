@@ -15,18 +15,23 @@ export default function PublicResults() {
   const [results, setResults] = useState([]);
   const [totalVotes, setTotalVotes] = useState(0);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   // Load elections for dropdown
   useEffect(() => {
     fetch(`${API}/results/public-elections`)
       .then(res => res.json())
-      .then(data => setElections(data))
+    .then(data => {
+  setElections(Array.isArray(data) ? data : []);
+})
       .catch(() => setError("Failed to load elections"));
   }, []);
 
   // Load results
   useEffect(() => {
     if (!selectedId) return;
+
+     setLoading(true);
 
     fetch(`${API}/results/public/${selectedId}`)
       .then(res => res.json())
@@ -48,7 +53,8 @@ export default function PublicResults() {
 
         setTotalVotes(total);
       })
-      .catch(() => setError("Failed to load results"));
+      .catch(() => setError("Failed to load results"))
+       .finally(() => setLoading(false));  
   }, [selectedId]);
 
   // Find winner
@@ -98,37 +104,48 @@ export default function PublicResults() {
               <label style={{ marginRight: 10, fontWeight: 500 }}>
                 Select Election:
               </label>
-
-              <select
-                value={selectedId}
-                onChange={e => {
-                  const val = e.target.value;
-                  setSelectedId(val);
-                  nav(`/results/${val}`);
-                }}
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: 6,
-                  border: "1px solid #ccc",
-                  minWidth: 280
-                }}
-              >
+<select
+  disabled={loading}   // ⭐ ADD HERE
+  value={selectedId}
+  onChange={e => {
+    const val = e.target.value;
+    setError("");
+    setSelectedId(val);
+    nav(`/results/${val}`);
+  }}
+  style={{
+    padding: "6px 12px",
+    borderRadius: 6,
+    border: "1px solid #ccc",
+    minWidth: 280
+  }}
+>
                 <option value="">-- Select Election --</option>
-                {elections.map(e => (
+               {Array.isArray(elections) && elections.map(e => (
                   <option key={e.electionId} value={e.electionId}>
                     {e.title} ({new Date(e.endedAt).toLocaleDateString()})
                   </option>
                 ))}
               </select>
             </div>
+{loading && (
+  <div style={{ textAlign: "center", marginBottom: 20 }}>
+    <div className="spinner"></div>
+  </div>
+)}
 
-            {error && <p style={{ color: "red" }}>{error}</p>}
-
-            {!error && selectedId && (
+{error && <p style={{ color: "red" }}>{error}</p>} 
+           {!error && !loading && selectedId && (
               <>
                 <h3 style={{ textAlign: "center", marginBottom: 20 }}>
                   Total Votes: {totalVotes}
                 </h3>
+
+                  {results.length === 0 && (
+      <p style={{ textAlign: "center", marginBottom: 20 }}>
+        No votes recorded yet.
+      </p>
+    )}
 
                 {/* Winner Highlight */}
                 {winner && (

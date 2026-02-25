@@ -24,7 +24,6 @@ const path = require("path");
 
 
 const { contract } = require("./blockchain");
-
 const requireAdmin = require("./middleware/requireAdmin");
 
 
@@ -139,21 +138,13 @@ const electionSchema = new mongoose.Schema({
   title: String,
 
   isActive: { type: Boolean, default: false }, // 👈 IMPORTANT
-    resultsPublished: { type: Boolean, default: false }, 
 
   startedAt: Date,
   endedAt: Date,
-resultsSnapshot: [
-  {
-    candidateId: String,
-    name: String,
-    party: String,
-    votes: Number
-  }
-],
+  startedBlock: Number,
+endedBlock: Number,
+resultsPublished: { type: Boolean, default: false },
 publishedAt: Date,
-publishedBlock: Number,
-  lastCountedBlock: { type: Number, default: 0 }
 
 
 }, { timestamps: true });
@@ -164,23 +155,6 @@ const Election = mongoose.model("Election", electionSchema);
 
 
 
-// (Optional) Route to create admin - use only once or protect it
-// You can remove or comment this after creating first admin.
-app.post('/api/admin/register', async (req, res) => {
-  try {
-    const { name, email, password } = req.body;
-    if (!name || !password) return res.status(400).json({ message: 'name and password required' });
-    const exists = await Admin.findOne({ name });
-    if (exists) return res.status(409).json({ message: 'Admin already exists' });
-
-    const hash = await bcrypt.hash(password, 10);
-    const admin = await Admin.create({ name, email, password: hash });
-    return res.status(201).json({ message: 'Admin created', adminId: admin._id });
-  } catch (err) {
-    console.error('admin register error:', err);
-    res.status(500).json({ message: 'Failed to create admin' });
-  }
-});
 
 // Login route
 app.post('/api/admin/login', async (req, res) => {
@@ -409,11 +383,35 @@ app.post("/api/votes/cast", async (req, res) => {
       return res.status(409).json({ message: "Already voted in this election" });
     }
 
-    // 2️⃣ Check election
-    const election = await Election.findOne({ electionId });
-    if (!election || !election.isActive) {
-      return res.status(403).json({ message: "Election not active" });
-    }
+
+ // 2️⃣ Check election (DB check)
+const election = await Election.findOne({ electionId });
+if (!election || !election.isActive) {
+  return res.status(403).json({ message: "Election not active" });
+}
+
+// ⭐ Prevent voting after results published
+if (election.resultsPublished) {
+  return res.status(403).json({ message: "Results already published" });
+}
+
+// ⭐ ADD THIS (Blockchain check)
+const activeOnChain = await contract.isElectionActive(electionId);
+if (!activeOnChain) {
+  return res.status(403).json({ 
+    message: "Election not active on blockchain" 
+  });
+}
+
+    const voterHash = ethers.keccak256(
+  ethers.toUtf8Bytes(voterId)
+);
+
+
+const alreadyOnChain = await contract.hasUserVoted(electionId, voterHash);
+if (alreadyOnChain) {
+  return res.status(409).json({ message: "Already voted (blockchain)" });
+}
 
     // 3️⃣ Validate candidate
     const candidate = await Candidate.findOne({ candidateId, electionId });
@@ -425,10 +423,8 @@ app.post("/api/votes/cast", async (req, res) => {
     voter.voteInProgress = true;
     await voter.save();
 
-    // 4️⃣ Hash voterId
-    const voterHash = ethers.keccak256(
-      ethers.toUtf8Bytes(voterId)
-    );
+    console.log("Casting vote on chain...");
+
 
     // 5️⃣ BLOCKCHAIN TRANSACTION
     const tx = await contract.castVote(
@@ -436,16 +432,17 @@ app.post("/api/votes/cast", async (req, res) => {
       electionId,
       candidateId
     );
+    console.log("Transaction hash:", tx.hash);
 
-    await tx.wait(); // ⬅️ IMPORTANT LINE
+const receipt = await tx.wait();
 
-    // 6️⃣ SAVE RESULT (ONLY ON SUCCESS)
-    await Vote.create({
-      voterHash,
-      electionId,
-      candidateId,
-      txHash: tx.hash
-    });
+await Vote.create({
+  voterHash,
+  electionId,
+  candidateId,
+  txHash: tx.hash,
+  blockNumber: receipt.blockNumber
+});
 
     // ✅ UNLOCK + FINALIZE VOTE
     voter.voteInProgress = false;
@@ -492,88 +489,102 @@ function generateNumericOTP(length = 6) {
 
 
 
-
 app.post("/api/elections/:electionId/start", requireAdmin, async (req, res) => {
   try {
-    const election = await Election.findOne({ electionId: req.params.electionId });
 
-    if (!election) {
+     const { electionId } = req.params;
+const election = await Election.findOne({ electionId });
+
+    if (!election)
       return res.status(404).json({ message: "Election not found" });
+
+    // 🔒 Prevent restart after ended
+    if (election.startedBlock) {
+      return res.status(400).json({
+        message: "Election already started once. Cannot restart."
+      });
     }
 
-    if (election.isActive) {
+    if (election.isActive)
       return res.status(400).json({ message: "Election already active" });
-    }
 
-    election.isActive = true;
-    election.startedAt = new Date();
-    election.endedAt = null;
+      // 🔥 CALL BLOCKCHAIN
+    const tx = await contract.startElection(electionId);
+   const receipt = await tx.wait();   // ⬅ wait until mined
+
+
+election.isActive = true;
+election.startedAt = new Date();
+election.startedBlock = receipt.blockNumber;
+
+election.resultsPublished = false;   // ⭐ ADD THIS
+election.publishedAt = null;         // ⭐ ADD THIS
 
     await election.save();
 
-    res.json({ message: "Election started successfully" });
+    res.json({ message: "Election started successfully", txHash: tx.hash });
+
   } catch (err) {
-    res.status(500).json({ message: "Failed to start election" });
+    console.error("Start election error:", err);
+    res.status(500).json({ message: err.reason || "Failed to start election" });
   }
 });
 
 app.post("/api/elections/:electionId/end", requireAdmin, async (req, res) => {
   try {
-    const electionId = req.params.electionId;
-
-    const election = await Election.findOne({ electionId });
-    if (!election) {
-      return res.status(404).json({ message: "Election not found" });
-    }
-
-    if (!election.isActive) {
-      return res.status(400).json({ message: "Election already ended" });
-    }
-
-    // 1️⃣ End election
-    election.isActive = false;
-    election.endedAt = new Date();
-    await election.save();
-
-    // 2️⃣ RESET QR FOR ALL VOTERS (IMPORTANT)
-    await Voter.updateMany(
-      {},
-      { $set: { qrUsed: false } }
-    );
-
-    res.json({
-      message: "Election ended successfully. QR reset for next election."
-    });
-
-  } catch (err) {
-    console.error("End election error:", err);
-    res.status(500).json({ message: "Failed to end election" });
-  }
-});
-
-
-
-app.post("/api/elections/:electionId/publish-results", requireAdmin, async (req, res) => {
-  try {
-    const election = await Election.findOne({
-      electionId: req.params.electionId
-    });
+    const { electionId } = req.params;
+const election = await Election.findOne({ electionId });
 
     if (!election)
       return res.status(404).json({ message: "Election not found" });
 
-    if (election.isActive)
-      return res.status(400).json({ message: "End election first" });
+    if (!election.isActive)
+      return res.status(400).json({ message: "Election already ended" });
 
-    election.resultsPublished = true;
+
+
+        // 🔥 CALL BLOCKCHAIN
+    const tx = await contract.endElection(electionId);
+ const receipt = await tx.wait();   // ⬅ wait until mined
+
+    election.isActive = false;
+    election.endedAt = new Date();
+    election.endedBlock = receipt.blockNumber; 
+
     await election.save();
 
-    res.json({ message: "Results published successfully" });
+    await Voter.updateMany({}, { $set: { qrUsed: false } });
+
+
+    res.json({ message: "Election ended successfully", txHash: tx.hash });
 
   } catch (err) {
-    res.status(500).json({ message: "Failed to publish results" });
+    console.error("End election error:", err);
+    res.status(500).json({ message: err.reason || "Failed to end election" });
   }
 });
+
+// app.post("/api/elections/:electionId/publish-results", requireAdmin, async (req, res) => {
+//   try {
+//     const election = await Election.findOne({
+//       electionId: req.params.electionId
+//     });
+
+//     if (!election)
+//       return res.status(404).json({ message: "Election not found" });
+
+//     if (election.isActive)
+//       return res.status(400).json({ message: "End election first" });
+
+//     election.resultsPublished = true;
+//     await election.save();
+
+//     res.json({ message: "Results published successfully" });
+
+//   } catch (err) {
+//     res.status(500).json({ message: "Failed to publish results" });
+//   }
+// });
 
 
 
@@ -784,6 +795,10 @@ app.post('/api/voters/validate-qr', async (req, res) => {
         message: "Election is not active"
       });
     }
+    const activeOnChain = await contract.isElectionActive(electionId);
+if (!activeOnChain) {
+  return res.status(403).json({ message: "Election not active on blockchain" });
+}
 
     // ⭐ CHECK IF ALREADY VOTED IN THIS ELECTION
     const alreadyVoted = voter.hasVoted?.some(

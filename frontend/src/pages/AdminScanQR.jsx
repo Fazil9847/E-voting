@@ -16,6 +16,11 @@ export default function AdminScanQR() {
   const scannerRef = useRef(null);
 
   useEffect(() => {
+    if (!election || !election.isActive) {
+  toast.error("Election is not active");
+  nav("/admin/dashboard");
+  return;
+}
     if (!election) return;
 
     // 🧹 Clean container (prevents duplication)

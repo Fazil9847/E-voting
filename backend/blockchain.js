@@ -33,12 +33,19 @@ const wallet = new ethers.Wallet(
 /* =====================================================
    🔵 CONTRACT ABI (MUST match deployed contract)
 ===================================================== */
-
 const votingAbi = [
-  "event VoteCast(bytes32 voterHash, string electionId, string candidateId)",
-  "function castVote(bytes32 voterHash, string electionId, string candidateId)"
-];
+  "event VoteCast(bytes32 indexed voterHash, string electionId, string candidateId)",
+  "event ElectionStarted(string electionId)",
+  "event ElectionEnded(string electionId)",
 
+  "function castVote(bytes32 voterHash, string electionId, string candidateId)",
+  "function startElection(string electionId)",
+  "function endElection(string electionId)",
+
+  "function getVoteCount(string electionId, string candidateId) view returns (uint256)",
+  "function isElectionActive(string electionId) view returns (bool)",
+  "function hasUserVoted(string electionId, bytes32 voterHash) view returns (bool)"
+];
 /* =====================================================
    🔵 CONTRACT INSTANCE
 ===================================================== */
@@ -48,22 +55,6 @@ const contract = new ethers.Contract(
   votingAbi,
   wallet
 );
-
-/* =====================================================
-   🔵 SAFE BLOCK NUMBER (Auto retry)
-===================================================== */
-
-async function safeGetBlockNumber(retries = 3) {
-  for (let i = 0; i < retries; i++) {
-    try {
-      return await provider.getBlockNumber();
-    } catch (e) {
-      console.log("Retrying RPC blockNumber...");
-      await new Promise(r => setTimeout(r, 1000));
-    }
-  }
-  throw new Error("RPC unreachable");
-}
 
 /* =====================================================
    🔵 LOG INFO
@@ -79,6 +70,5 @@ console.log("Blockchain connected:", process.env.VOTING_CONTRACT_ADDRESS);
 module.exports = {
   provider,
   contract,
-  votingAbi,
-  safeGetBlockNumber
+  votingAbi
 };
