@@ -105,7 +105,9 @@ if (!window.confirm("Confirm vote for this candidate?")) {
         {/* 👤 VOTER CARD */}
         <Card>
           <CardContent style={{ textAlign: "center" }}>
-            <h3>{student.name}</h3>
+            <h3 style={{ textAlign: "center", width: "100%" }}>
+  {student.name}
+</h3>
             <p style={{ color: "#6B7280" }}>{student.voterId}</p>
 
             {student.photo && (

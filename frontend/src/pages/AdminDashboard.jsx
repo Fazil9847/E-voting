@@ -19,6 +19,8 @@ export default function AdminDashboard() {
   const [newElectionTitle, setNewElectionTitle] = useState("");
 
   const token = localStorage.getItem("admin_token");
+  const [startingId, setStartingId] = useState(null);
+const [endingId, setEndingId] = useState(null);
 
   /* ---------------- AUTH ---------------- */
   useEffect(() => {
@@ -96,46 +98,56 @@ export default function AdminDashboard() {
 
   /* ---------------- START ELECTION ---------------- */
   const startElection = async (id) => {
-    try {
-      const res = await fetch(`${API}/elections/${id}/start`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` }
-      });
+  try {
+    setStartingId(id);
 
-      const data = await res.json();
-      if (!res.ok) {
-        alert(data.message);
-        return;
-      }
+    const res = await fetch(`${API}/elections/${id}/start`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` }
+    });
 
+    const data = await res.json();
+
+    if (!res.ok) {
       alert(data.message);
-      fetchElections();
-    } catch {
-      alert("Failed to start election");
+      return;
     }
-  };
 
+    alert(data.message);
+    await fetchElections();
+
+  } catch {
+    alert("Failed to start election");
+  } finally {
+    setStartingId(null);
+  }
+};
   /* ---------------- END ELECTION ---------------- */
   const endElection = async (id) => {
-    try {
-      const res = await fetch(`${API}/elections/${id}/end`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` }
-      });
+  try {
+    setEndingId(id);
 
-      const data = await res.json();
-      if (!res.ok) {
-        alert(data.message);
-        return;
-      }
+    const res = await fetch(`${API}/elections/${id}/end`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` }
+    });
 
+    const data = await res.json();
+
+    if (!res.ok) {
       alert(data.message);
-      fetchElections();
-    } catch {
-      alert("Failed to end election");
+      return;
     }
-  };
 
+    alert(data.message);
+    await fetchElections();
+
+  } catch {
+    alert("Failed to end election");
+  } finally {
+    setEndingId(null);
+  }
+};
   /* ---------------- LOGOUT ---------------- */
   const logout = () => {
     localStorage.removeItem("admin_token");
@@ -190,19 +202,27 @@ export default function AdminDashboard() {
                 </p>
 
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                 <Button
-  disabled={selectedElection.isActive}
+               <Button
+  disabled={selectedElection.isActive || startingId === selectedElection.electionId}
   onClick={() => startElection(selectedElection.electionId)}
 >
-  Start Election
+  {startingId === selectedElection.electionId ? (
+    <div className="spinner" />
+  ) : (
+    "Start Election"
+  )}
 </Button>
 
 <Button
-  disabled={!selectedElection.isActive}
+  disabled={!selectedElection.isActive || endingId === selectedElection.electionId}
   variant="destructive"
   onClick={() => endElection(selectedElection.electionId)}
 >
-  End Election
+  {endingId === selectedElection.electionId ? (
+    <div className="spinner" />
+  ) : (
+    "End Election"
+  )}
 </Button>
 
                   <Button
@@ -219,6 +239,15 @@ export default function AdminDashboard() {
                   >
                     Scan QR
                   </Button>
+           <Button
+  onClick={() =>
+    nav("/admin/scan?mode=face", {
+      state: { election: selectedElection }
+    })
+  }
+>
+  Scan QR (With Face Verification)
+</Button>
                 </div>
               </>
             )}

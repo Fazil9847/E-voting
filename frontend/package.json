@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@zxing/browser": "^0.1.5",
     "axios": "^1.8.4",
+    "face-api.js": "^0.22.2",
     "html5-qrcode": "^2.3.8",
     "lucide-react": "^0.507.0",
     "react": "^18.2.0",
