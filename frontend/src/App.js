@@ -13,8 +13,8 @@ import AdminScanQR from "./pages/AdminScanQR";
 import AdminVote from "./pages/AdminVote";
 import AdminResults from "./pages/AdminResults";
 import PublicResults from "./pages/PublicResults";
-// import AdminVoterPreview from "./pages/AdminVoterPreview";
-import AdminFaceDemo from "./pages/AdminFaceDemo";
+import AdminVoterPreview from "./pages/AdminVoterPreview";
+// import AdminFaceDemo from "./pages/AdminFaceDemo";
 
 export default function App() {
   return (
