@@ -2,7 +2,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
-import { Users, Shield, CheckCircle } from "lucide-react";
+import { Users,  CheckCircle } from "lucide-react";
 
 export default function Landing() {
   const navigate = useNavigate();
