@@ -99,7 +99,9 @@ voteInProgress: { type: Boolean, default: false },
 
 
   otpCode: String,
-  otpExpiresAt: Date
+  otpExpiresAt: Date,
+
+  password: { type: String }
 }, { timestamps: true });
 
 
@@ -215,6 +217,33 @@ app.post('/api/voters', async (req, res) => {
   } catch (err) {
     if (err.code === 11000) return res.status(409).json({ message: 'Duplicate voterId or qrToken' });
     res.status(400).json({ message: err.message });
+  }
+});
+
+// 🔐 Public Voter Password Login
+app.post("/api/voters/login", async (req, res) => {
+  try {
+    const { voterId, password } = req.body;
+
+    if (!voterId || !password) {
+      return res.status(400).json({ message: "voterId and password required" });
+    }
+
+    const voter = await Voter.findOne({ voterId });
+
+    if (!voter) {
+      return res.status(404).json({ message: "Voter not found" });
+    }
+
+    if (voter.password !== password) {
+      return res.status(401).json({ message: "Incorrect password" });
+    }
+
+    return res.json({ message: "Login successful" });
+
+  } catch (err) {
+    console.error("Login error:", err);
+    return res.status(500).json({ message: "Server error" });
   }
 });
 
@@ -737,6 +766,35 @@ app.post('/api/voters/generate-qr', async (req, res) => {
   } catch (err) {
     console.error('generate-qr error:', err);
     return res.status(500).json({ message: 'Failed to generate QR token' });
+  }
+});
+
+
+app.post('/api/voters/get-existing-qr', async (req, res) => {
+  try {
+    const { voterId } = req.body;
+
+    if (!voterId) {
+      return res.status(400).json({ message: 'voterId is required' });
+    }
+
+    const voter = await Voter.findOne({ voterId });
+
+    if (!voter) {
+      return res.status(404).json({ message: 'Voter not found' });
+    }
+
+    if (!voter.qrToken) {
+      return res.status(403).json({
+        message: "QR not generated yet. Please login using OTP once."
+      });
+    }
+
+    return res.json({ qrToken: voter.qrToken });
+
+  } catch (err) {
+    console.error("get-existing-qr error:", err);
+    return res.status(500).json({ message: "Server error" });
   }
 });
 
