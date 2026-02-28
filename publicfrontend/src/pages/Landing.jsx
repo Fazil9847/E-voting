@@ -30,19 +30,6 @@ export default function Landing() {
         </Card>
 
         <Card>
-          <div className="icon" style={{ background: "linear-gradient(90deg,#FB923C,#EF4444)" }}>
-            <Shield color="white" />
-          </div>
-          <h3>Admin Portal</h3>
-          <p>Manage elections and verify votes on blockchain</p>
-          <div style={{ width: "100%", marginTop: "auto" }}>
-            <Button className="w-full" variant="secondary" onClick={() => navigate("/admin/login")}>
-              Admin Login
-            </Button>
-          </div>
-        </Card>
-
-        <Card>
           <div className="icon" style={{ background: "linear-gradient(90deg,#10B981,#06B6D4)" }}>
             <CheckCircle color="white" />
           </div>
