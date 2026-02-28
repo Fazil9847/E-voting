@@ -50,11 +50,6 @@ export default function Landing() {
           <p>Every vote recorded immutably on Ethereum</p>
         </div>
         <div className="feature">
-          <div style={{ fontSize: 28 }}>🔐</div>
-          <h4>QR Authentication</h4>
-          <p>No MetaMask needed for voters</p>
-        </div>
-        <div className="feature">
           <div style={{ fontSize: 28 }}>🔎</div>
           <h4>Result</h4>
           <p>Transparent and auditable results</p>
