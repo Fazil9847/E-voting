@@ -10,7 +10,7 @@ export default function VoterQR() {
   const nav = useNavigate();
   const loc = useLocation();
   const state = loc.state || {};
-  const { qr_token, admission_no, name, email } = state;
+ const { qr_token, admission_no } = state;
 
   const [qrUrl, setQrUrl] = useState("");
 
