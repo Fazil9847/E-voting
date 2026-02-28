@@ -14,7 +14,7 @@ import AdminVote from "./pages/AdminVote";
 import AdminResults from "./pages/AdminResults";
 import PublicResults from "./pages/PublicResults";
 import AdminVoterPreview from "./pages/AdminVoterPreview";
-// import AdminFaceDemo from "./pages/AdminFaceDemo";
+import AdminFaceDemo from "./pages/AdminFaceDemo";
 
 export default function App() {
   return (
@@ -35,7 +35,7 @@ export default function App() {
        <Route path="/results/:id" element={<PublicResults />} />
 
         <Route path="/admin/preview" element={<AdminVoterPreview />} />
-        {/* <Route path="/admin/face-scan" element={<AdminFaceDemo />} /> */}
+        <Route path="/admin/face-scan" element={<AdminFaceDemo />} />
       </Routes>
       <Toaster position="top-center" richColors />
     </div>
