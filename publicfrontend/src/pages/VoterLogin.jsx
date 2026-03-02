@@ -10,55 +10,52 @@ const API = `${process.env.REACT_APP_BACKEND_URL || "http://localhost:5000"}/api
 
 export default function VoterLogin() {
   const navigate = useNavigate();
+
   const [admission, setAdmission] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false); // ✅ NEW
 
   const handleLogin = async () => {
+    if (loading) return; // 🚫 prevent double click
+
     if (!admission.trim() || !password.trim()) {
       toast.error("Enter Admission Number and Password");
       return;
     }
 
+    setLoading(true); // ✅ START LOADING
+
     const voterId = admission.trim().toUpperCase();
-    console.log("API URL:", API);
 
     try {
       // 🔐 Step 1: Password Login
-  // 🔐 Step 1: Password Login
-const loginRes = await fetch(`${API}/voters/login`, {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json"
-  },
-  body: JSON.stringify({ voterId, password })
-});
+      const loginRes = await fetch(`${API}/voters/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ voterId, password })
+      });
 
-// Read raw response first
-const rawText = await loginRes.text();
+      const rawText = await loginRes.text();
 
-let loginData = {};
+      let loginData = {};
+      try {
+        loginData = rawText ? JSON.parse(rawText) : {};
+      } catch {
+        toast.error("Server error");
+        return;
+      }
 
-try {
-  loginData = rawText ? JSON.parse(rawText) : {};
-} catch (err) {
-  toast.error("Server error");
-  return;
-}
-
-console.log("Login status:", loginRes.status);
-console.log("Login response:", loginData);
-
-if (!loginRes.ok) {
-  toast.error(loginData.message || "Invalid credentials");
-  return;
-}
-
+      if (!loginRes.ok) {
+        toast.error(loginData.message || "Invalid credentials");
+        return;
+      }
 
       toast.success("Login successful!");
 
-
-     // 📱 Step 2: Get Existing QR (Do NOT generate new one)
-const qrRes = await fetch(`${API}/voters/get-existing-qr`, {
+      // 📱 Step 2: Get Existing QR
+      const qrRes = await fetch(`${API}/voters/get-existing-qr`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -68,11 +65,12 @@ const qrRes = await fetch(`${API}/voters/get-existing-qr`, {
 
       const qrData = await qrRes.json();
 
-     if (!qrRes.ok) {
-  toast.error(qrData.message || "QR not available");
-  return;
-}
-      // 🚀 Step 3: Navigate to QR page
+      if (!qrRes.ok) {
+        toast.error(qrData.message || "QR not available");
+        return;
+      }
+
+      // 🚀 Step 3: Navigate
       navigate("/voter/qr", {
         state: {
           qr_token: qrData.qrToken,
@@ -83,12 +81,14 @@ const qrRes = await fetch(`${API}/voters/get-existing-qr`, {
     } catch (error) {
       console.error(error);
       toast.error("Server error");
+    } finally {
+      setLoading(false); // ✅ STOP LOADING ALWAYS
     }
   };
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <Card style={{ width: 520 }} className="glass">
+      <Card style={{ width: 520 }}>
         <CardContent>
           <h2 style={{ fontFamily: "Space Grotesk", marginBottom: 8 }}>
             Voter Login
@@ -98,6 +98,7 @@ const qrRes = await fetch(`${API}/voters/get-existing-qr`, {
           <Input
             placeholder="Admission number"
             value={admission}
+            disabled={loading}
             onChange={(e) => setAdmission(e.target.value.toUpperCase())}
           />
 
@@ -107,13 +108,25 @@ const qrRes = await fetch(`${API}/voters/get-existing-qr`, {
               type="password"
               placeholder="Enter password"
               value={password}
+              disabled={loading}
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
 
           <div style={{ marginTop: 16 }}>
-            <Button className="w-full" onClick={handleLogin}>
-              Login & Get QR
+            <Button
+              className="w-full"
+              onClick={handleLogin}
+              disabled={loading}
+            >
+              {loading ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div className="spinner" style={{ width: 18, height: 18 }} />
+                  Processing...
+                </div>
+              ) : (
+                "Login & Get QR"
+              )}
             </Button>
           </div>
         </CardContent>

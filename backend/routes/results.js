@@ -11,7 +11,7 @@ const router = express.Router();
 router.post("/publish/:electionId", requireAdmin, async (req, res) => {
   try {
     const { electionId } = req.params;
-    const force = req.query.force === "true";   // ⭐ ADD THIS
+    const force = req.query.force === "true"; 
 
     const election = await Election.findOne({ electionId });
     if (!election)
@@ -62,6 +62,8 @@ router.get("/public-elections", async (req, res) => {
 /* =======================================================
    🌐 PUBLIC → GET RESULTS (NO JWT)
 ======================================================= */
+
+
 router.get("/public/:electionId", async (req, res) => {
   try {
     const { electionId } = req.params;

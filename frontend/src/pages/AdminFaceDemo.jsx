@@ -126,7 +126,7 @@ const detection = await faceapi
 
     if (detection) {
       storedDescriptorRef.current = detection.descriptor;
-      setStoredReady(true);   // 🔥 IMPORTANT
+      setStoredReady(true);  
       console.log("Stored face descriptor loaded");
     }
   };
@@ -159,7 +159,7 @@ intervalRef.current = setInterval(async () => {
 
   if (!videoRef.current) return;
 
-  // 🔥 ADD THIS LINE HERE
+
   if (videoRef.current.readyState !== 4) return;
 
   const liveDetection = await faceapi
@@ -179,8 +179,7 @@ if (!liveDetection) {
     );
 
     setDistance(dist);
-
-
+    
 if (dist < 0.48 && !matched) {
   setMatched(true);
 matchedRef.current = true;

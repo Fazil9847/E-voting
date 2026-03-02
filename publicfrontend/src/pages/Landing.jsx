@@ -2,58 +2,96 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { Card } from "../components/ui/card";
 import { Button } from "../components/ui/button";
-import { Users,  CheckCircle } from "lucide-react";
+import { Users, BarChart3, ShieldCheck } from "lucide-react";
 
 export default function Landing() {
   const navigate = useNavigate();
 
   return (
     <div className="container">
+      
+      {/* ===== HEADER ===== */}
       <div className="header">
-        <div style={{ fontSize: 36, marginBottom: 8 }}>📋</div>
         <h1>CampusVote</h1>
-        <p>Blockchain-powered secure college elections. Transparent, tamper-proof, and verifiable voting system.</p>
+        <p>
+          Secure and transparent college elections powered by blockchain
+          technology. Tamper-proof, verifiable and trusted.
+        </p>
       </div>
 
-      <div className="grid">
+      {/* ===== MAIN ACTION CARDS ===== */}
+      <div className="grid" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
+        
+        {/* VOTER CARD */}
         <Card>
-          <div className="icon" style={{ background: "linear-gradient(90deg,#60A5FA,#7C3AED)" }}>
+          <div
+            className="icon"
+            style={{ background: "linear-gradient(90deg,#2563EB,#7C3AED)" }}
+          >
             <Users color="white" />
           </div>
-          <h3>I'm a Voter</h3>
-          <p>Cast your vote securely using QR authentication</p>
+
+          <h3>Voter Portal</h3>
+          <p>
+            Login securely and cast your vote using OTP and QR authentication.
+          </p>
+
           <div style={{ width: "100%", marginTop: "auto" }}>
-            <Button className="w-full" onClick={() => navigate("/voter/login")}>
+            <Button
+              className="w-full"
+              onClick={() => navigate("/voter/login")}
+            >
               Start Voting
             </Button>
           </div>
         </Card>
 
+        {/* RESULTS CARD */}
         <Card>
-          <div className="icon" style={{ background: "linear-gradient(90deg,#10B981,#06B6D4)" }}>
-            <CheckCircle color="white" />
+          <div
+            className="icon"
+            style={{ background: "linear-gradient(90deg,#059669,#06B6D4)" }}
+          >
+            <BarChart3 color="white" />
           </div>
-          <h3>Election Result</h3>
-          <p>see the vote election results</p>
+
+          <h3>Election Results</h3>
+          <p>
+            View officially published election results with complete transparency.
+          </p>
+
           <div style={{ width: "100%", marginTop: "auto" }}>
-            <Button className="w-full" variant="positive" onClick={() => navigate("/results/election-2025-01")}>
-               Result
+            <Button
+              className="w-full"
+              onClick={() => navigate("/results/election-2025-01")}
+            >
+              View Results
             </Button>
           </div>
         </Card>
       </div>
 
-      <div className="features">
+      {/* ===== TRUST FEATURES ===== */}
+      <div className="features" style={{ marginTop: "60px" }}>
+        
         <div className="feature">
-          <div style={{ fontSize: 28 }}>🛡️</div>
+          <ShieldCheck size={32} />
           <h4>Blockchain Secured</h4>
-          <p>Every vote recorded immutably on Ethereum</p>
+          <p>Votes are recorded immutably on Ethereum smart contracts.</p>
         </div>
+
         <div className="feature">
-          <div style={{ fontSize: 28 }}>🔎</div>
-          <h4>Result</h4>
-          <p>Transparent and auditable results</p>
+          <BarChart3 size={32} />
+          <h4>Transparent Results</h4>
+          <p>Results are publicly verifiable and tamper-resistant.</p>
         </div>
+
+        <div className="feature">
+          <Users size={32} />
+          <h4>Verified Voters</h4>
+          <p>OTP, QR, and identity verification ensure secure participation.</p>
+        </div>
+
       </div>
     </div>
   );

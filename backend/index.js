@@ -86,8 +86,8 @@ const voterSchema = new mongoose.Schema({
   age: Number,
   voterId: { type: String, unique: true, required: true },
 
-  department: String,        // ✅ ADD
-  photo: String,             // ✅ ADD (URL or filename)
+  department: String,        
+  photo: String,           
 
   qrToken: { type: String, unique: true, sparse: true },
   qrUsed: { type: Boolean, default: false },
@@ -125,8 +125,6 @@ const voteSchema = new mongoose.Schema({
   electionId: { type: String, required: true },
   candidateId: { type: String, required: true },
   votedAt: { type: Date, default: Date.now },
-
-  // future blockchain fields
   txHash: String
 });
 
@@ -139,7 +137,7 @@ const electionSchema = new mongoose.Schema({
   electionId: { type: String, unique: true, required: true },
   title: String,
 
-  isActive: { type: Boolean, default: false }, // 👈 IMPORTANT
+  isActive: { type: Boolean, default: false }, 
 
   startedAt: Date,
   endedAt: Date,
@@ -419,10 +417,12 @@ if (!election || !election.isActive) {
   return res.status(403).json({ message: "Election not active" });
 }
 
-// ⭐ Prevent voting after results published
+
+    // ⭐ Prevent voting after results published
 if (election.resultsPublished) {
   return res.status(403).json({ message: "Results already published" });
 }
+
 
 // ⭐ ADD THIS (Blockchain check)
 const activeOnChain = await contract.isElectionActive(electionId);
@@ -546,9 +546,8 @@ election.isActive = true;
 election.startedAt = new Date();
 election.startedBlock = receipt.blockNumber;
 
-election.resultsPublished = false;   // ⭐ ADD THIS
-election.publishedAt = null;         // ⭐ ADD THIS
-
+election.resultsPublished = false;  
+election.publishedAt = null;        
     await election.save();
 
     res.json({ message: "Election started successfully", txHash: tx.hash });
